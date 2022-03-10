@@ -1,5 +1,7 @@
 /* Reference : 
 https://algorithmtutor.com/Data-Structures/Tree/Treaps/
+http://sunmoon-template.blogspot.com/2015/01/split-merge-randomized-binary-search.html
+B06303131
 
 DSA 2021/ 6/ 10
 HW 3 PROBLEM 5
@@ -11,242 +13,278 @@ BY B08303113 ChiHaoLu
 #include <string.h>
 #define true 1
 #define false 0
-#define size 10000000
-
 
 /*----- Construct the Data Structure -----*/
 
 typedef struct node{
-	int key;
+	int size;
 	int priority;
-	int left;
-	int right;
+	int random;
+	int max;
+	int reverse_tag;
+	int increase_tag;
+	struct node* left;
+	struct node* right;
 	
 }Node;
 
-Node *Forest;
-int s = 0;
-int total = 0;
 
-/*----- Construct the based function Split and Merge -----*/
+Node* s = NULL;
 
-void SPLIT(int root, int k, int *l_root, int *r_root){
-	if(root == 0){
-		*l_root = 0;
-		*r_root = 0;
+int Size(Node* root){
+	if(root){
+		return root->size;
 	}
-	else{
-		if(Forest[root].key <= k){
-			*l_root = root;
-			SPLIT(Forest[root].right, k, &Forest[root].right, r_root);
+	return 0;
+}
+
+int getMAX(Node* root){
+	if(root){
+		return root->max;
+	}
+	return -2147483648;
+} 
+
+void Down(Node* root);
+void Up(Node* root){ // 有可能改變結構的時候
+	if(root == NULL){
+		return;
+	}
+	
+	root->size = 1;
+	root->max = root->priority;
+	
+	if(root->left){
+		Down(root->left);
+		if(getMAX(root->left) > getMAX(root)){
+			root->max = getMAX(root->left);
 		}
-		else{
-			*r_root = root;
-			SPLIT(Forest[root].left, k, l_root, &Forest[root].left);		
-		}		
+		root->size += Size(root->left);
+	}
+	if(root->right){
+		Down(root->right);
+		if(getMAX(root->right) > getMAX(root)){
+			root->max = getMAX(root->right);
+		}
+		root->size += Size(root->right);
 	}
 }
 
-int MERGE(int a, int b){
-	if(a == 0){
-		return b;
+void Down(Node* root){ // 有可能改變max的時候，訪問點的時候 
+	if(root == NULL){
+		return;
 	}
-	if(b == 0){
-		return a; 
-	}
-
-	if(Forest[a].priority > Forest[b].priority){
-		Forest[a].right = MERGE(Forest[a].right, b);
-		return a;
-	}
-	else if(Forest[a].priority == Forest[b].priority){
-		if(Forest[a].key < Forest[b].key){
-			Forest[a].right = MERGE(Forest[a].right, b);
-			return a;
-		} 
-		else{
-			Forest[b].left = MERGE(a, Forest[b].left);
-			return b;			
+	if(root->reverse_tag == 1){
+		
+		Node* temp = root->left;
+		root->left = root->right;
+		root->right = temp;
+		
+		if(root->left){
+			(root->left)->reverse_tag ^= 1;
 		}
+		if(root->right){
+			(root->right)->reverse_tag ^= 1;
+		}
+		root->reverse_tag = 0;
+	}
+	
+	if(root->increase_tag){
+		
+		root->priority += root->increase_tag;
+		root->max += root->increase_tag;
+		
+		if(root->left){
+			(root->left)->increase_tag += root->increase_tag;
+		}
+		if(root->right){
+			(root->right)->increase_tag += root->increase_tag;
+		}
+		
+		root->increase_tag = 0;
+	}
+	
+}
+
+/*----- Construct the based function Split and Merge -----*/
+
+void SPLIT(Node* root, int k, Node **l_root, Node **r_root){
+	if(root == NULL){
+		*l_root = NULL;
+		*r_root = NULL;
 	}
 	else{
-		Forest[b].left = MERGE(a, Forest[b].left);
+		Down(root);
+		if(Size(root->left) < k){
+			*l_root = root;
+			SPLIT(root->right, k - Size(root->left) - 1, &((*l_root)->right), &(*r_root));
+		}
+		else{
+			*r_root = root;
+			SPLIT(root->left, k, &(*l_root), &((*r_root)->left));		
+		}
+		Up(root);
+	}
+}
+
+Node* MERGE(Node* a, Node* b){
+	if(a == NULL){
+		return b;
+	}
+	if(b == NULL){
+		return a; 
+	}
+	if(b->random < a->random){
+		Down(a);
+		a->right = MERGE(a->right, b);
+		Up(a);
+		return a;
+	}
+	else{
+		Down(b);
+		b->left = MERGE(a, b->left);
+		Up(b);
 		return b;
 	}
 }
 
 /*----- Construct the Insert Function -----*/
 
-int NewNode(int p, int k){
+Node* NewNode(int p){
 	
-	total++;
-	int root = total; 
-	Forest[root].key = k;
-	Forest[root].priority = p;
-	Forest[root].left = 0;
-	Forest[root].right = 0;
+	Node* root = (Node*)malloc(sizeof(Node)); 
+	root->priority = p;
+	root->size = 1;
+	root->max = p;
+	root->random = rand();
+	root->reverse_tag = 0;
+	root->increase_tag = 0;
+	root->left = NULL;
+	root->right = NULL;
 	
 	return root;
 }
 
-void INSERTION(int *root, int p, int k){
+void INSERTION(Node **root, int p, int k){
 	
-	int a = 0;
-	int b = 0;
+	Node* a = NULL;
+	Node* b = NULL;
 	
 	SPLIT(*root, k, &a, &b);
-	*root = MERGE(MERGE(a, NewNode(p, k)), b);
-}
-
-void inorderTravel_insertion(int root, int k){
+	*root = MERGE(MERGE(a, NewNode(p)), b);
 	
-	if(root == 0){
-		return;
-	} 
-	
-	if(Forest[root].key > k){
-		Forest[root].key++;
-	}
-	
-	inorderTravel_insertion(Forest[root].left, k);
-	inorderTravel_insertion(Forest[root].right, k);
 }
 
 /*----- Construct the Delete Function -----*/
 
 void DELETION(int k){
 	
-	int a = 0;
-	int b = 0;
-	int c = 0;
+	Node* a = NULL;
+	Node* b = NULL;
+	Node* c = NULL;
+	
+	if(s == NULL){
+		return;
+	}
 	
 	SPLIT(s, k, &a, &c);
 	SPLIT(a, k - 1, &a, &b);
-	b = MERGE(Forest[b].left, Forest[b].right);
-	s = MERGE(MERGE(a, b), c);
-	
-}
-
-void inorderTravel_deletion(int root, int k){
-	
-	if(root == 0){
-		return;
-	}
-
-	if(Forest[root].key > k){
-		Forest[root].key -= 1;
-	}
-	
-	inorderTravel_deletion(Forest[root].left, k);
-	inorderTravel_deletion(Forest[root].right, k);
+	Down(b);
+	s = MERGE(a , c);
 }
 
 /*----- Construct the Reverse Function -----*/
 
 void REVERSE(int l, int r){
 	
-	int a = 0;
-	int b = 0;
-	int c = 0;
-	int temp = 0;
-	
-	SPLIT(s, l - 1, &a, &c);
-	SPLIT(c, r, &b, &c);
-	
-	inorderTravel_reverse(b, &temp, l, r);
-	
-	s = MERGE(MERGE(a, temp), c);
-}
-
-void inorderTravel_reverse(int root, int* final, int l, int r){
-
-	if(root == 0){
+	if(l == r){
 		return;
 	}
 	
-	Forest[root].key = r - (Forest[root].key - l);
-	INSERTION(final, Forest[root].priority, Forest[root].key);
+	Node* a = NULL;
+	Node* b = NULL;
+	Node* c = NULL;
 	
-	inorderTravel_reverse(Forest[root].left, final, l, r);
-	inorderTravel_reverse(Forest[root].right, final, l, r);
+	SPLIT(s, l - 1, &a, &c);
+	SPLIT(c, r - (l - 1), &b, &c);
 	
+	b->reverse_tag = 1;
+	
+	s = MERGE(MERGE(a, b), c);
 }
 
 /*----- Construct the Increase Function -----*/
 
 void INCREASE(int l, int r, int p){
 	
-	int a = 0;
-	int b = 0;
-	int c = 0;
-	int temp = 0;
+	Node* a = NULL;
+	Node* b = NULL;
+	Node* c = NULL;
 	
 	SPLIT(s, l - 1, &a, &c);
-	SPLIT(c, r, &b, &c);
+	SPLIT(c, r - (l - 1), &b, &c);
 	
-	inorderTravel_increase(b, &temp, p);
+	b->increase_tag += p;
 	
-	s = MERGE(MERGE(a, temp), c);
-}
-
-void inorderTravel_increase(int root, int* final, int p){
-	
-	if(root == 0){
-		return;
-	}
-	
-	Forest[root].priority += p;
-	INSERTION(final, Forest[root].priority, Forest[root].key);
-		
-	inorderTravel_increase(Forest[root].left, final, p);
-	inorderTravel_increase(Forest[root].right, final, p);
+	s = MERGE(MERGE(a, b), c);	
 }
 
 /*----- Construct the Query and Testing Print Function -----*/
 
 void QUERY(int l, int r){
 
-	int looker = s;
+	Node* looker = s;
 	
+	if(s == NULL){
+		return;
+	}
+	Node* a = NULL;
+	Node* b = NULL;
+	Node* c = NULL;
+	
+	SPLIT(s, l - 1, &a, &c);
+	SPLIT(c, r - (l - 1), &b, &c);
+	
+	printf("%d", b->max);
+
+	s = MERGE(MERGE(a, b), c);
+
+}
+
+/* deletion max */
+
+void DELETION_max(){
+	
+	Down(s);
+	int MAX = s->max;
+	int pos = 1;
+	Node *current = s;
 	while(1){
-		if(Forest[looker].key < l){
-			if(Forest[looker].right == 0){
-				break;
-			}
-			looker = Forest[looker].right;
-		}
-		else if(Forest[looker].key > r){
-			if(Forest[looker].left == 0){
-				break;
-			} 
-			looker = Forest[looker].left;
-		}
-		else{
-			printf("%d", Forest[looker].priority);
+		Down(current->left);
+		Down(current->right);
+		if(getMAX(current->left) != MAX && current->priority == MAX){
+			// find the max
 			break;
 		}
-	}	
-}
-
-void inorder(int root){
-    if (root){
-        inorder(Forest[root].left);
-        int temp;
-        printf("key: %d  | priority: %d ", Forest[root].key, Forest[root].priority);
-        if (Forest[root].left){
-        	temp = Forest[root].left;
-        	printf(" | left child: %d", Forest[temp].key);
+		else{
+			if(getMAX(current->left) == MAX){
+				current = current->left;
+			}
+			else{
+				pos += (Size(current->left) + 1);
+				current = current->right;
+			}
 		}
-        	
-        if (Forest[root].right){
-        	temp = Forest[root].right;
-            printf(" | right child: %d", Forest[temp].key);
-		}
-
-        printf("\n");
-        inorder(Forest[root].right);
-    }
+		
+	}
+	
+	// get the final pos
+	pos += Size(current->left);
+	
+	DELETION(pos);
+	return;
 }
+ 
 
 /*----- Construct the Main Function -----*/
 
@@ -257,71 +295,51 @@ int main(){
 	int operation = 0;
 	int i;
 	int l, r, p, k;
-	Forest = (Node*)malloc(size * sizeof(Node));
+	srand(20000102);
 	
 	scanf("%d", &N);
 	scanf("%d", &Q);
 	
 	for(i = 0; i < N; i++){
 		scanf("%d", &p);
-		INSERTION(&s, p, i + 1);
+		INSERTION(&s, p, i);
 	}
-//	inorder(s);
 	
 	while(Q--){
 		scanf("%d", &operation);
 		if(operation == 1){
 			scanf("%d", &p);
 			scanf("%d", &k);
-			inorderTravel_insertion(s, k);
-			INSERTION(&s, p, k + 1);
-			
-//			printf("SUCCESSFULLY INSERTION\n");
+			INSERTION(&s, p, k);
 		}
 		else if(operation == 2){
 			scanf("%d", &k);
 			DELETION(k);
-			inorderTravel_deletion(s, k);
-//			printf("SUCCESSFULLY DELETE\n");
 		}
 		else if(operation == 3){
 			scanf("%d", &l);
 			scanf("%d", &r);
 			scanf("%d", &p);
 			INCREASE(l ,r, p);
-//			printf("SUCCESSFULLY INCREASE\n");
 		}		
 		else if(operation == 4){
 			scanf("%d", &l);
 			scanf("%d", &r);
 			QUERY(l, r);
-				if(Q != 0){
-					printf("\n");
-				}
-//			printf("SUCCESSFULLY QUERY\n");
+			if(Q != 0){
+				printf("\n");
+			}
 		}
 		else if(operation == 5){
 			scanf("%d", &l);
 			scanf("%d", &r);
 			REVERSE(l, r);
-//			printf("SUCCESSFULLY REVERSE\n");	
 		}
 		else{
-			int old_key = Forest[s].key;
-			DELETION(old_key);
-			inorderTravel_deletion(s, old_key);
-//			printf("SUCCESSFULLY DELETE\n");
+			if(s != NULL){
+				DELETION_max();				
+			}
 		}
-		
-//		if(s == 0){
-//			printf("tree is nothing\n");
-//		}
-//		else{
-//			printf("the root key: %d, priority: %d\n", Forest[s].key, Forest[s].priority);
-//		}
-//		inorder(s);
-
-
 	}
 	
 	
